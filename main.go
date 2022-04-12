@@ -31,10 +31,10 @@ type user struct {
 
 // Report
 type report struct {
-	Merchant_name string
-	Outlet_name   string
-	Omzet         string
-	Date_create   string
+	Merchant_name string `json:"merchant_name"`
+	Outlet_name   string `json:"outlet_name"`
+	Omzet         string `json:"omzet"`
+	Date_create   string `json:"date_create"`
 }
 
 //Merchants
@@ -78,37 +78,37 @@ type (
 	}
 )
 
-func(_r*AreaRepository) InsertArea(param1 int32, param2 int64, types []string, ar *Model.Area) (err error){
-	inst := _r.DB.Model(ar)
-	// Var area int 
-	// area = 0
-	switch types {
-		case 'persegi panjang':
-			area = params1 * param2
-			ar.AreaValue = area
-			ar.AreaType = 'persegi panjang'
-			err = _r.DB.create(&ar).Error
-			if err != nil{
-				return err
-			}
-		case 'persegi':
-			var area = param1*param2
-			ar.AreaValue = area
-			ar.AreaType = 'persegi'
-			err = _r.DB.create(&ar).Error
-			if err != nil{
-				return err
-			}
-		case 'segitiga':
-			area = 0.5 * (param1 * param2)
-			ar.AreaValue = area
-			ar.AreaType = 'segitiga'
-			err = _r.DB.create(&ar).Error
-			if err != nil{
-				return err
-			}
-	}
-}
+// func(_r*AreaRepository) InsertArea(param1 int32, param2 int64, types []string, ar *Model.Area) (err error){
+// 	inst := _r.DB.Model(ar)
+// 	// Var area int
+// 	// area = 0
+// 	switch types {
+// 		case 'persegi panjang':
+// 			area = params1 * param2
+// 			ar.AreaValue = area
+// 			ar.AreaType = 'persegi panjang'
+// 			err = _r.DB.create(&ar).Error
+// 			if err != nil{
+// 				return err
+// 			}
+// 		case 'persegi':
+// 			var area = param1*param2
+// 			ar.AreaValue = area
+// 			ar.AreaType = 'persegi'
+// 			err = _r.DB.create(&ar).Error
+// 			if err != nil{
+// 				return err
+// 			}
+// 		case 'segitiga':
+// 			area = 0.5 * (param1 * param2)
+// 			ar.AreaValue = area
+// 			ar.AreaType = 'segitiga'
+// 			err = _r.DB.create(&ar).Error
+// 			if err != nil{
+// 				return err
+// 			}
+// 	}
+// }
 
 // Result adl array dari produk
 type Result struct {
@@ -118,7 +118,6 @@ type Result struct {
 }
 
 var SECRET = []byte("tes-super-secret-auth-key")
-var api_key = "majo1234!"
 
 func CreateJWT() (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
@@ -143,14 +142,14 @@ func ValidateJWT(next func(w http.ResponseWriter, r *http.Request)) http.Handler
 				_, ok := t.Method.(*jwt.SigningMethodHMAC)
 				if !ok {
 					w.WriteHeader(http.StatusUnauthorized)
-					w.Write([]byte("Not Authorized"))
+					w.Write([]byte("Code: 401, Message: Not Authorized"))
 				}
 				return SECRET, nil
 			})
 
 			if err != nil {
 				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte("Not Authorized :" + err.Error()))
+				w.Write([]byte("Code: 401, Message: Not Authorized :" + err.Error()))
 			}
 
 			if token.Valid {
@@ -158,21 +157,30 @@ func ValidateJWT(next func(w http.ResponseWriter, r *http.Request)) http.Handler
 			}
 		} else {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Not Authorized"))
+			w.Write([]byte("Code: 401, Message: Not Authorized"))
 		}
 	})
 }
 
 func GetJwt(w http.ResponseWriter, r *http.Request) {
-	if r.Header["Access"] != nil {
-		if r.Header["Access"][0] != api_key {
-			return
-		} else {
+	username, password, _ := r.BasicAuth()
+
+	users := QueryUser(username)
+
+	// hash md5
+	hash := md5.New()
+	hash.Write([]byte(password))
+	encodepass := hex.EncodeToString(hash.Sum(nil))
+
+	if username == users.Username {
+		if users.Password == encodepass {
 			token, err := CreateJWT()
 			if err != nil {
 				return
 			}
 			fmt.Fprintf(w, token)
+		} else {
+			return
 		}
 	}
 }
@@ -204,7 +212,7 @@ func routes() {
 	http.HandleFunc("/", home)
 	http.HandleFunc("/login", login)
 	http.HandleFunc("/logout", logout)
-	http.HandleFunc("/getreport", getReport)
+	http.Handle("/getreport", ValidateJWT(getReport))
 
 	//for api
 	http.Handle("/api", ValidateJWT(homeApi))
@@ -252,7 +260,8 @@ API to get omzet bulanan
 */
 func getReport(w http.ResponseWriter, r *http.Request) {
 
-	query := QueryGetOmzet("2021-11-01", "2021-11-30")
+	// query := QueryGetOmzet("2021-11-01", "2021-11-30")
+	query := ReadData()
 
 	res := Result{Code: 200, Data: query, Message: "sukses get data"}
 	result, err := json.Marshal(res)
@@ -260,7 +269,6 @@ func getReport(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
@@ -287,6 +295,41 @@ func QueryGetOmzet(start_date string, end_date string) report {
 		&reports.Date_create)
 
 	return reports
+}
+
+func ReadData() (res []string) {
+	// db, err := sql.Open("mysql", "user1@/my_db")
+	connect_db()
+
+	defer db.Close()
+
+	rows, err := db.Query(
+		`select Merchant_name , Outlet_name, sum(bill_total) omzet, date_create from ( 
+		select merchant_name, outlet_name, bill_total, DATE_FORMAT(t.created_at,'%Y-%m-%d') date_create from Merchants m 
+		left join Outlets o on m.id = o.merchant_id 
+		left join Transactions t on t.outlet_id = o.id
+		left join Users u on u.id = m.user_id
+		where u.id =2
+		) a
+		where date_create >= '2021-11-01' and date_create <= '2021-11-30' 
+		group by date_create,outlet_name, merchant_name 
+		order by date_create asc
+	`)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer rows.Close()
+	var reports = report{}
+	for rows.Next() {
+		err := rows.Scan(&reports.Merchant_name, &reports.Outlet_name, &reports.Omzet, &reports.Date_create)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		res = append(res, reports.Merchant_name, reports.Outlet_name, reports.Omzet, reports.Date_create)
+	}
+	return
 }
 
 /*
