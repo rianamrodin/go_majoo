@@ -30,7 +30,7 @@ type user struct {
 }
 
 // Report
-type report struct {
+type Report struct {
 	Merchant_name string `json:"merchant_name"`
 	Outlet_name   string `json:"outlet_name"`
 	Omzet         string `json:"omzet"`
@@ -277,8 +277,8 @@ func getReport(w http.ResponseWriter, r *http.Request) {
 /*
 	monthlyReport untuk get laporan Omset bulanan
 */
-func QueryGetOmzet(start_date string, end_date string) report {
-	var reports = report{}
+func QueryGetOmzet(start_date string, end_date string) Report {
+	var reports = Report{}
 
 	err = db.QueryRow(`
 	select merchant_name , outlet_name, sum(bill_total), date_create from ( 
@@ -320,7 +320,7 @@ func ReadData() (res []string) {
 		return
 	}
 	defer rows.Close()
-	var reports = report{}
+	var reports = Report{}
 	for rows.Next() {
 		err := rows.Scan(&reports.Merchant_name, &reports.Outlet_name, &reports.Omzet, &reports.Date_create)
 		if err != nil {
