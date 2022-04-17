@@ -261,9 +261,37 @@ API to get omzet bulanan
 func getReport(w http.ResponseWriter, r *http.Request) {
 
 	// query := QueryGetOmzet("2021-11-01", "2021-11-30")
-	query := ReadData()
+	rows, err := db.Query(
+		`select Merchant_name , Outlet_name, sum(bill_total) omzet, date_create from ( 
+		select merchant_name, outlet_name, bill_total, DATE_FORMAT(t.created_at,'%Y-%m-%d') date_create from Merchants m 
+		left join Outlets o on m.id = o.merchant_id 
+		left join Transactions t on t.outlet_id = o.id
+		left join Users u on u.id = m.user_id
+		where u.id =2
+		) a
+		where date_create >= '2021-11-01' and date_create <= '2021-11-30' 
+		group by date_create,outlet_name, merchant_name 
+		order by date_create asc
+	`)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	var Merchant_name string
+	var Outlet_name string
+	var Omzet string
+	var Date_create string
+	var reports []Report
 
-	res := Result{Code: 200, Data: query, Message: "sukses get data"}
+	for rows.Next() {
+		err := rows.Scan(&Merchant_name, &Outlet_name, &Omzet, &Date_create)
+		if err != nil {
+			panic(err)
+		}
+		reports = append(reports, Report{Merchant_name: Merchant_name, Outlet_name: Outlet_name, Date_create: Date_create, Omzet: Omzet})
+	}
+
+	res := Result{Code: 200, Data: reports, Message: "sukses get data"}
 	result, err := json.Marshal(res)
 
 	if err != nil {
@@ -295,41 +323,6 @@ func QueryGetOmzet(start_date string, end_date string) Report {
 		&reports.Date_create)
 
 	return reports
-}
-
-func ReadData() (res []string) {
-	// db, err := sql.Open("mysql", "user1@/my_db")
-	connect_db()
-
-	defer db.Close()
-
-	rows, err := db.Query(
-		`select Merchant_name , Outlet_name, sum(bill_total) omzet, date_create from ( 
-		select merchant_name, outlet_name, bill_total, DATE_FORMAT(t.created_at,'%Y-%m-%d') date_create from Merchants m 
-		left join Outlets o on m.id = o.merchant_id 
-		left join Transactions t on t.outlet_id = o.id
-		left join Users u on u.id = m.user_id
-		where u.id =2
-		) a
-		where date_create >= '2021-11-01' and date_create <= '2021-11-30' 
-		group by date_create,outlet_name, merchant_name 
-		order by date_create asc
-	`)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer rows.Close()
-	var reports = Report{}
-	for rows.Next() {
-		err := rows.Scan(&reports.Merchant_name, &reports.Outlet_name, &reports.Omzet, &reports.Date_create)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		res = append(res, reports.Merchant_name, reports.Outlet_name, reports.Omzet, reports.Date_create)
-	}
-	return
 }
 
 /*
