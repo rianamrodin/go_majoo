@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -259,10 +260,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 API to get omzet bulanan
 */
 func getReport(w http.ResponseWriter, r *http.Request) {
-
-	// query := QueryGetOmzet("2021-11-01", "2021-11-30")
-	rows, err := db.Query(
-		`select Merchant_name , Outlet_name, sum(bill_total) omzet, date_create from ( 
+	sql := `select merchant_name, outlet_name, sum(bill_total) omzet, date_create from ( 
 		select merchant_name, outlet_name, bill_total, DATE_FORMAT(t.created_at,'%Y-%m-%d') date_create from Merchants m 
 		left join Outlets o on m.id = o.merchant_id 
 		left join Transactions t on t.outlet_id = o.id
@@ -271,11 +269,23 @@ func getReport(w http.ResponseWriter, r *http.Request) {
 		) a
 		where date_create >= '2021-11-01' and date_create <= '2021-11-30' 
 		group by date_create,outlet_name, merchant_name 
-		order by date_create asc
-	`)
+		order by date_create asc`
+
+	var page int = 1
+	perPage := 5
+	if r.URL.Query().Get("page") != "" {
+		param_page := r.URL.Query().Get("page")
+		page, err = strconv.Atoi(param_page)
+	}
+	sql2 := fmt.Sprintf("%s LIMIT %d OFFSET %d", sql, perPage, (page-1)*perPage)
+	fmt.Println(sql2)
+
+	rows, err := db.Query(sql2)
+
 	if err != nil {
 		panic(err)
 	}
+
 	defer rows.Close()
 	var Merchant_name string
 	var Outlet_name string
