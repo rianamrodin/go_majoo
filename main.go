@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -32,10 +33,10 @@ type user struct {
 
 // Report
 type Report struct {
+	Date_create   string `json:"date_create"`
 	Merchant_name string `json:"merchant_name"`
 	Outlet_name   string `json:"outlet_name"`
 	Omzet         string `json:"omzet"`
-	Date_create   string `json:"date_create"`
 }
 
 //Merchants
@@ -256,11 +257,41 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func in_array(val interface{}, array interface{}) (exists bool) {
+	exists = false
+
+	switch reflect.TypeOf(array).Kind() {
+	case reflect.Slice:
+		s := reflect.ValueOf(array)
+
+		for i := 0; i < s.Len(); i++ {
+			if reflect.DeepEqual(val, s.Index(i).Interface()) == true {
+				exists = true
+				return
+			}
+		}
+	}
+
+	return
+}
+
 /**
 API to get omzet bulanan
 */
 func getReport(w http.ResponseWriter, r *http.Request) {
-	sql := `select merchant_name, outlet_name, sum(bill_total) omzet, date_create from ( 
+	sql := `select tanggal date_create, (case when merchant_name is null then '' else merchant_name end) merchant_name, (case when outlet_name is null then '' else outlet_name end) outlet_name, (case when omzet is null then 0 else omzet end) omzet from (
+		select * from 
+(select adddate('1970-01-01',t4.i*10000 + t3.i*1000 + t2.i*100 + t1.i*10 + t0.i) tanggal from
+ (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t0,
+ (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t1,
+ (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t2,
+ (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t3,
+ (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t4) v
+where tanggal between '2021-11-01' and '2021-11-30'
+order by tanggal asc
+) b
+left join ( 
+	select Merchant_name , Outlet_name, sum(bill_total) omzet, date_create  from ( 
 		select merchant_name, outlet_name, bill_total, DATE_FORMAT(t.created_at,'%Y-%m-%d') date_create from Merchants m 
 		left join Outlets o on m.id = o.merchant_id 
 		left join Transactions t on t.outlet_id = o.id
@@ -269,8 +300,9 @@ func getReport(w http.ResponseWriter, r *http.Request) {
 		) a
 		where date_create >= '2021-11-01' and date_create <= '2021-11-30' 
 		group by date_create,outlet_name, merchant_name 
-		order by date_create asc`
-
+) a on b.tanggal = a.date_create
+order by tanggal asc
+`
 	var page int = 1
 	perPage := 5
 	if r.URL.Query().Get("page") != "" {
@@ -278,7 +310,6 @@ func getReport(w http.ResponseWriter, r *http.Request) {
 		page, err = strconv.Atoi(param_page)
 	}
 	sql2 := fmt.Sprintf("%s LIMIT %d OFFSET %d", sql, perPage, (page-1)*perPage)
-	fmt.Println(sql2)
 
 	rows, err := db.Query(sql2)
 
@@ -287,18 +318,18 @@ func getReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer rows.Close()
+	var Date_create string
 	var Merchant_name string
 	var Outlet_name string
 	var Omzet string
-	var Date_create string
 	var reports []Report
 
 	for rows.Next() {
-		err := rows.Scan(&Merchant_name, &Outlet_name, &Omzet, &Date_create)
+		err := rows.Scan(&Date_create, &Merchant_name, &Outlet_name, &Omzet)
 		if err != nil {
 			panic(err)
 		}
-		reports = append(reports, Report{Merchant_name: Merchant_name, Outlet_name: Outlet_name, Date_create: Date_create, Omzet: Omzet})
+		reports = append(reports, Report{Date_create: Date_create, Merchant_name: Merchant_name, Outlet_name: Outlet_name, Omzet: Omzet})
 	}
 
 	res := Result{Code: 200, Data: reports, Message: "sukses get data"}
