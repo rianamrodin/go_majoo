@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/fatih/structs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/kataras/go-sessions"
 )
@@ -31,13 +32,25 @@ type user struct {
 	Password string
 }
 
+type Data struct {
+	Items []Report
+	Nama  map[string]string
+}
+
 // Report
 type Report struct {
-	Date_create   string `json:"date_create"`
-	Merchant_name string `json:"merchant_name"`
-	Outlet_name   string `json:"outlet_name"`
-	Omzet         string `json:"omzet"`
+	Date_create   string
+	Merchant_name string
+	Outlet_name   string
+	Omzet         string
 }
+
+// type Report struct {
+// 	Date_create   string `json:"date_create"`
+// 	Merchant_name string `json:"merchant_name"`
+// 	Outlet_name   string `json:"outlet_name"`
+// 	Omzet         string `json:"omzet"`
+// }
 
 //Merchants
 type Merchants struct {
@@ -249,6 +262,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		session := sessions.Start(w, r)
 		session.Set("username", users.Username)
 		session.Set("name", users.Name)
+		session.Set("id", users.ID)
 		http.Redirect(w, r, "/", 302)
 	} else {
 		//login failed
@@ -279,6 +293,12 @@ func in_array(val interface{}, array interface{}) (exists bool) {
 API to get omzet bulanan
 */
 func getReport(w http.ResponseWriter, r *http.Request) {
+
+	c, err := r.Cookie("session_token")
+	fmt.Println(c)
+
+	var iduser string
+	// fmt.Println(iduser)
 	sql := `select tanggal date_create, (case when merchant_name is null then '' else merchant_name end) merchant_name, (case when outlet_name is null then '' else outlet_name end) outlet_name, (case when omzet is null then 0 else omzet end) omzet from (
 		select * from 
 (select adddate('1970-01-01',t4.i*10000 + t3.i*1000 + t2.i*100 + t1.i*10 + t0.i) tanggal from
@@ -296,7 +316,7 @@ left join (
 		left join Outlets o on m.id = o.merchant_id 
 		left join Transactions t on t.outlet_id = o.id
 		left join Users u on u.id = m.user_id
-		where u.id =2
+		where u.id =?
 		) a
 		where date_create >= '2021-11-01' and date_create <= '2021-11-30' 
 		group by date_create,outlet_name, merchant_name 
@@ -311,7 +331,7 @@ order by tanggal asc
 	}
 	sql2 := fmt.Sprintf("%s LIMIT %d OFFSET %d", sql, perPage, (page-1)*perPage)
 
-	rows, err := db.Query(sql2)
+	rows, err := db.Query(sql2, iduser)
 
 	if err != nil {
 		panic(err)
@@ -344,29 +364,6 @@ order by tanggal asc
 }
 
 /*
-	monthlyReport untuk get laporan Omset bulanan
-*/
-func QueryGetOmzet(start_date string, end_date string) Report {
-	var reports = Report{}
-
-	err = db.QueryRow(`
-	select merchant_name , outlet_name, sum(bill_total), date_create from ( 
-		select merchant_name, outlet_name, bill_total, DATE_FORMAT(t.created_at,"%Y-%m-%d") date_create from Merchants m 
-		left join Outlets o on m.id = o.merchant_id 
-		left join Transactions t on t.outlet_id = o.id
-		) a
-		where date_create >= '2021-11-01' and date_create <= '2021-11-30'
-		group by date_create,outlet_name, merchant_name 
-		order by date_create asc
-	`).Scan(&reports.Merchant_name,
-		&reports.Outlet_name,
-		&reports.Omzet,
-		&reports.Date_create)
-
-	return reports
-}
-
-/*
 	find data Users
 */
 func QueryUser(username string) user {
@@ -391,21 +388,78 @@ func QueryUser(username string) user {
 */
 func home(w http.ResponseWriter, r *http.Request) {
 	session := sessions.Start(w, r)
+	var iduser string
 	if len(session.GetString("username")) == 0 {
 		http.Redirect(w, r, "/login", 301)
+	} else {
+		iduser = session.GetString("id")
 	}
 
-	var data = map[string]string{
+	fmt.Println(iduser)
+
+	sql := `select tanggal date_create, (case when merchant_name is null then '' else merchant_name end) merchant_name, (case when outlet_name is null then '' else outlet_name end) outlet_name, (case when omzet is null then 0 else omzet end) omzet from (
+		select * from 
+		(select adddate('1970-01-01',t4.i*10000 + t3.i*1000 + t2.i*100 + t1.i*10 + t0.i) tanggal from
+		(select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t0,
+		(select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t1,
+		(select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t2,
+		(select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t3,
+		(select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t4) v
+		where tanggal between '2021-11-01' and '2021-11-30'
+		order by tanggal asc
+		) b
+		left join ( 
+			select Merchant_name , Outlet_name, sum(bill_total) omzet, date_create  from ( 
+				select merchant_name, outlet_name, bill_total, DATE_FORMAT(t.created_at,'%Y-%m-%d') date_create from Merchants m 
+				left join Outlets o on m.id = o.merchant_id 
+				left join Transactions t on t.outlet_id = o.id
+				left join Users u on u.id = m.user_id
+				where u.id =?
+				) a
+				where date_create >= '2021-11-01' and date_create <= '2021-11-30' 
+				group by date_create,outlet_name, merchant_name 
+		) a on b.tanggal = a.date_create
+		order by tanggal asc
+`
+	var page int = 1
+	perPage := 5
+	if r.URL.Query().Get("page") != "" {
+		param_page := r.URL.Query().Get("page")
+		page, err = strconv.Atoi(param_page)
+	}
+	sql2 := fmt.Sprintf("%s LIMIT %d OFFSET %d", sql, perPage, (page-1)*perPage)
+
+	rows, _ := db.Query(sql2, iduser)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer rows.Close()
+	var Date_create string
+	var Merchant_name string
+	var Outlet_name string
+	var Omzet string
+	// var reports []Report
+
+	data2 := Data{}
+
+	for rows.Next() {
+		err := rows.Scan(&Date_create, &Merchant_name, &Outlet_name, &Omzet)
+		if err != nil {
+			panic(err)
+		}
+		data2.Items = append(data2.Items, Report{Date_create: Date_create, Merchant_name: Merchant_name, Outlet_name: Outlet_name, Omzet: Omzet})
+	}
+	data2.Nama = map[string]string{
 		"username": session.GetString("username"),
 		"message":  "Welcome to the Go Majoo !",
 	}
-	var t, err = template.ParseFiles("views/home.html")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	t.Execute(w, data)
-	return
+
+	m := structs.Map(data2)
+
+	tmpl, _ := template.ParseFiles("views/home.html")
+	tmpl.Execute(w, m)
 
 }
 

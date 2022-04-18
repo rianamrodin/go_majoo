@@ -14,13 +14,18 @@
     <script src="https://code.jquery.com/jquery-3.2.1.js"
         integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE=" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/js/materialize.min.js"></script>
-
+    <style>
+        th,
+        td {
+            border: 1px solid black;
+        }
+    </style>
 </head>
 
 <body>
     <nav>
         <div class="nav-wrapper">
-            <a href="#" class="brand-logo" style="padding-left: 5px;"> Hallo, {{ .username }}</a>
+            <a href="#" class="brand-logo" style="padding-left: 5px;"> Hallo, {{ .Nama.username }}</a>
             <div style="padding-right: 30px;">
                 <ul id="nav-mobile" class="right">
                     <li><a href="/">Home</a></li>
@@ -35,12 +40,52 @@
             <tr>
                 <th>No</th>
                 <th>Tanggal</th>
-                <th>Nama Merchan</th>
+                <th>Nama Merchant</th>
                 <th>Nama Outlet</th>
                 <th>Omzet</th>
             </tr>
-            <!-- loop -->
+            {{ range .Items}}
+            <tr>
+                <td></td>
+                <td>{{ .Date_create }}</td>
+                <td>{{ .Merchant_name }}</td>
+                <td>{{ .Outlet_name }}</td>
+                <td>{{ .Omzet }}</td>
+            </tr>
+            {{ end}}
         </table>
+        {{if .paginateHasPages}}
+        <ul class="pagination">
+
+            {{if .paginateHasPrev}}
+            <li class="page-item"><a class="page-link" href="/listproperty">First</a></li>
+            {{end}}
+
+            {{if .paginateHasPrev}}
+            <li class="page-item"><a class="page-link" href="/listproperty/{{.paginatePrev}}">Previous</a></li>
+            {{end}}
+
+            {{range .paginatePages}}
+
+            {{if (ge $.paginateLast .)}}
+            <li class="page-item {{if (eq $.paginateCurrent .)}}
+                                {{print " active"}} {{else}} {{print "" }} {{end}}">
+
+                <a class="page-link" href="/listproperty/{{.}}">{{.}}</a>
+            </li>
+            {{end}}
+            {{end}}
+
+            {{if .paginateHasNext}}
+            <li class="page-item"><a class="page-link" href="/listproperty/{{.paginateNext}}">Next</a></li>
+            {{end}}
+
+            {{if (gt $.paginateLast $.paginateCurrent)}}
+            <li class="page-item"><a class="page-link" href="/listproperty/{{.paginateLast}}">Last</a></li>
+            {{end}}
+
+        </ul>
+        {{end}}
     </div>
 </body>
 
